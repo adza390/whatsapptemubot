@@ -1,17 +1,28 @@
 const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
-require('dotenv').config(); // Dodaj ovo na početak da učita .env varijable
+require('dotenv').config();
 
 const OpenAI = require("openai");
 
-// ✅ Čita ključ iz .env fajla umjesto da stoji u kodu
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
+const http = require('http'); // Dodano za web server
+
 const client = new Client({
   authStrategy: new LocalAuth()
+});
+
+// Jednostavan HTTP server za Render i Uptimerobot
+const port = process.env.PORT || 3000;
+const server = http.createServer((req, res) => {
+  res.writeHead(200, {'Content-Type': 'text/plain'});
+  res.end('Bot je aktivan\n');
+});
+server.listen(port, () => {
+  console.log(`Server sluša na portu ${port}`);
 });
 
 // Učitaj podatke ili kreiraj prazne ako nema fajlova
@@ -98,7 +109,6 @@ client.on('message', async msg => {
             max_tokens: 100,
             temperature: 0.5,
             });
-
 
             const odgovor = response.choices[0].message.content.trim();
             return msg.reply(`🤖 AI odgovor:\n${odgovor}`);
