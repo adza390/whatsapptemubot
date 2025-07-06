@@ -101,13 +101,13 @@ client.on('message', async msg => {
             }
 
             const response = await openai.chat.completions.create({
-            model: "gpt-4.1-nano",
-            messages: [
-              { role: "system", content: "Odgovaraj kratko i jasno." },
-              { role: "user", content: tekst }
-            ],
-            max_tokens: 100,
-            temperature: 0.5,
+                model: "gpt-4.1-nano",
+                messages: [
+                  { role: "system", content: "Odgovaraj kratko i jasno." },
+                  { role: "user", content: tekst }
+                ],
+                max_tokens: 100,
+                temperature: 0.5,
             });
 
             const odgovor = response.choices[0].message.content.trim();
@@ -192,19 +192,25 @@ client.on('message', async msg => {
         return msg.reply('✅ Paket dodat!');
     }
 
-    // IZMJENA paketa
+    // IZMJENA paketa - sad ide lista paketa za izbor
     if (tekstLower === 'izmijeni') {
         if (!dozvoljeniAdmini.includes(broj)) return msg.reply('🚫 Nemaš dozvolu za izmjene.');
-        s.korak = 'izm_id';
-        return msg.reply('🔁 Unesi ID paketa koji želiš izmijeniti:');
+        if (paketi.length === 0) return msg.reply('📦 Nema paketa za izmjenu.');
+        s.korak = 'izm_listaj';
+        // Napravi listu paketa s brojevima i nazivima
+        let listaPaketa = '📦 Izaberi paket za izmjenu:\n';
+        paketi.forEach((p, i) => {
+            listaPaketa += `${i + 1}. ${p.naziv} (ID: ${p.id})\n`;
+        });
+        return msg.reply(listaPaketa);
     }
 
-    if (s.korak === 'izm_id') {
-        const p = paketi.find(p => p.id.toLowerCase() === tekstLower);
-        if (!p) {
-            s.korak = null;
-            return msg.reply('❌ Nema paketa s tim ID.');
+    if (s.korak === 'izm_listaj') {
+        const brojIzmjene = parseInt(tekst);
+        if (isNaN(brojIzmjene) || brojIzmjene < 1 || brojIzmjene > paketi.length) {
+            return msg.reply('❌ Netačan izbor. Molim pošalji redni broj paketa sa liste.');
         }
+        const p = paketi[brojIzmjene - 1];
         s.podaci = { original: p };
         s.korak = 'izm_naziv';
         return msg.reply(`📛 Novi naziv? (pošalji . za isti: ${p.naziv})`);
