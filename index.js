@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
   res.end('Bot je aktivan\n');
 });
 server.listen(port, () => {
-  console.log(`Server sluša na portu ${port}`);
+  console.log(Server sluša na portu ${port});
 });
 
 // Učitaj podatke ili kreiraj prazne ako nema fajlova
@@ -48,7 +48,7 @@ const dozvoljeniAdmini = [
 let aiPozdravljeni = new Set();
 
 client.on('qr', qr => {
-    const qrLink = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}&size=250x250`;
+    const qrLink = https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}&size=250x250;
     console.log("📱 Otvori ovaj link da vidiš QR kod:");
     console.log(qrLink);
 });
@@ -83,7 +83,7 @@ client.on('message', async msg => {
 
     if (tekstLower === 'ai') {
         s.modAI = true;
-        return msg.reply('🤖 AI mod je aktiviran. Piši šta želiš, a da izađeš, pošalji `left`.');
+        return msg.reply('🤖 AI mod je aktiviran. Piši šta želiš, a da izađeš, pošalji left.');
     }
     if (tekstLower === 'left') {
         s.modAI = false;
@@ -101,17 +101,17 @@ client.on('message', async msg => {
             }
 
             const response = await openai.chat.completions.create({
-                model: "gpt-4.1-nano",
-                messages: [
-                  { role: "system", content: "Odgovaraj kratko i jasno." },
-                  { role: "user", content: tekst }
-                ],
-                max_tokens: 100,
-                temperature: 0.5,
+            model: "gpt-4.1-nano",
+            messages: [
+              { role: "system", content: "Odgovaraj kratko i jasno." },
+              { role: "user", content: tekst }
+            ],
+            max_tokens: 100,
+            temperature: 0.5,
             });
 
             const odgovor = response.choices[0].message.content.trim();
-            return msg.reply(`🤖 AI odgovor:\n${odgovor}`);
+            return msg.reply(🤖 AI odgovor:\n${odgovor});
 
         } catch (error) {
             console.error("OpenAI greška:", error.response?.data || error.message);
@@ -121,7 +121,7 @@ client.on('message', async msg => {
 
     // HELP
     if (tekstLower === 'help') {
-        return msg.reply(`📚 Komande:
+        return msg.reply(📚 Komande:
 
 ➡️ status - prikaz paketa
 ➡️ help - prikaz komandi
@@ -130,7 +130,7 @@ client.on('message', async msg => {
 
 🔐 (Admini)
 🆕 novi - dodaj paket
-✏️ izmijeni - izmijeni postojeći paket`);
+✏️ izmijeni - izmijeni postojeći paket);
     }
 
     // STATUS ZA SVE
@@ -138,7 +138,7 @@ client.on('message', async msg => {
         if (paketi.length === 0) return msg.reply('📦 Trenutno nema dostupnih paketa.');
         let txt = '📦 Lista paketa:\n';
         paketi.forEach((p, i) => {
-            txt += `${i + 1}. ${p.naziv}\n`;
+            txt += ${i + 1}. ${p.naziv}\n;
         });
         return msg.reply(txt + '\n\nPošalji broj paketa za više informacija.');
     }
@@ -147,12 +147,12 @@ client.on('message', async msg => {
     const brojPaketa = parseInt(tekst);
     if (!isNaN(brojPaketa) && brojPaketa >= 1 && brojPaketa <= paketi.length) {
         const p = paketi[brojPaketa - 1];
-        return msg.reply(`📦 Info:
+        return msg.reply(📦 Info:
 
 🆔 ID: ${p.id}
 📛 Naziv: ${p.naziv}
 📅 Vrijeme: ${p.vrijeme}
-📍 Status: ${p.status}`);
+📍 Status: ${p.status});
     }
 
     // Ako nije admin → prekini
@@ -192,40 +192,34 @@ client.on('message', async msg => {
         return msg.reply('✅ Paket dodat!');
     }
 
-    // IZMJENA paketa - sad ide lista paketa za izbor
+    // IZMJENA paketa
     if (tekstLower === 'izmijeni') {
         if (!dozvoljeniAdmini.includes(broj)) return msg.reply('🚫 Nemaš dozvolu za izmjene.');
-        if (paketi.length === 0) return msg.reply('📦 Nema paketa za izmjenu.');
-        s.korak = 'izm_listaj';
-        // Napravi listu paketa s brojevima i nazivima
-        let listaPaketa = '📦 Izaberi paket za izmjenu:\n';
-        paketi.forEach((p, i) => {
-            listaPaketa += `${i + 1}. ${p.naziv} (ID: ${p.id})\n`;
-        });
-        return msg.reply(listaPaketa);
+        s.korak = 'izm_id';
+        return msg.reply('🔁 Unesi ID paketa koji želiš izmijeniti:');
     }
 
-    if (s.korak === 'izm_listaj') {
-        const brojIzmjene = parseInt(tekst);
-        if (isNaN(brojIzmjene) || brojIzmjene < 1 || brojIzmjene > paketi.length) {
-            return msg.reply('❌ Netačan izbor. Molim pošalji redni broj paketa sa liste.');
+    if (s.korak === 'izm_id') {
+        const p = paketi.find(p => p.id.toLowerCase() === tekstLower);
+        if (!p) {
+            s.korak = null;
+            return msg.reply('❌ Nema paketa s tim ID.');
         }
-        const p = paketi[brojIzmjene - 1];
         s.podaci = { original: p };
         s.korak = 'izm_naziv';
-        return msg.reply(`📛 Novi naziv? (pošalji . za isti: ${p.naziv})`);
+        return msg.reply(📛 Novi naziv? (pošalji . za isti: ${p.naziv}));
     }
 
     if (s.korak === 'izm_naziv') {
         if (tekst !== '.') s.podaci.original.naziv = tekst;
         s.korak = 'izm_status';
-        return msg.reply(`📍 Novi status? (pošalji . za isti: ${s.podaci.original.status})`);
+        return msg.reply(📍 Novi status? (pošalji . za isti: ${s.podaci.original.status}));
     }
 
     if (s.korak === 'izm_status') {
         if (tekst !== '.') s.podaci.original.status = tekst; // case-sensitive
         s.korak = 'izm_vrijeme';
-        return msg.reply(`📅 Novo vrijeme? (pošalji . za isti: ${s.podaci.original.vrijeme})`);
+        return msg.reply(📅 Novo vrijeme? (pošalji . za isti: ${s.podaci.original.vrijeme}));
     }
 
     if (s.korak === 'izm_vrijeme') {
@@ -238,7 +232,7 @@ client.on('message', async msg => {
 
     // Nepoznata komanda ako nije u sesiji unosa
     if (!s.korak) {
-        return msg.reply('❌ Nepoznata komanda. Pošalji `help` za listu komandi.');
+        return msg.reply('❌ Nepoznata komanda. Pošalji help za listu komandi.');
     }
 });
 
