@@ -2,54 +2,33 @@ const { Client, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
 require('dotenv').config();
-
+const http = require('http');
 const OpenAI = require("openai");
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
-const http = require('http'); // Dodano za web server
+const client = new Client({ authStrategy: new LocalAuth() });
 
-const client = new Client({
-  authStrategy: new LocalAuth()
-});
-
-// Jednostavan HTTP server za Render i Uptimerobot
 const port = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { 'Content-Type': 'text/plain' });
   res.end('Bot je aktivan\n');
 });
-server.listen(port, () => {
-  console.log(`Server sluša na portu ${port}`);
-});
+server.listen(port, () => console.log(`Server sluša na portu ${port}`));
 
-// Učitaj podatke ili kreiraj prazne ako nema fajlova
-let paketi = [];
-try {
-  paketi = JSON.parse(fs.readFileSync('./paketi.json'));
-} catch {
-  paketi = [];
-}
-
-let admini = [];
-try {
-  admini = JSON.parse(fs.readFileSync('./admini.json'));
-} catch {
-  admini = [];
-}
-
-let prijavljeniAdmini = [];
+// -------------------- Učitavanje podataka ---------------------
+let paketi = [], admini = [], prijavljeniAdmini = [], chatovi = [];
 let sesije = {};
+const aiPozdravljeni = new Set();
+const dozvoljeniAdmini = ['38765061038@c.us'];
 
-// Samo ovi brojevi imaju pravo izmjena
-const dozvoljeniAdmini = [
-  '38765061038@c.us'
-];
+try { paketi = JSON.parse(fs.readFileSync('./paketi.json')); } catch {}
+try { admini = JSON.parse(fs.readFileSync('./admini.json')); } catch {}
+try { chatovi = JSON.parse(fs.readFileSync('./chatovi.json')); } catch {}
 
-// Set za praćenje ko je već dobio AI pozdrav
-let aiPozdravljeni = new Set();
+function sacuvajPakete() { fs.writeFileSync('./paketi.json', JSON.stringify(paketi, null, 2)); }
+function sacuvajAdmin() { fs.writeFileSync('./admini.json', JSON.stringify(admini, null, 2)); }
+function sacuvajChatove() { fs.writeFileSync('./chatovi.json', JSON.stringify(chatovi, null, 2)); }
 
 client.on('qr', qr => {
   const qrLink = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qr)}&size=250x250`;
@@ -57,21 +36,18 @@ client.on('qr', qr => {
   console.log(qrLink);
 });
 
-client.on('ready', () => {
-  console.log('✅ Bot je spreman!');
-});
-
-function sacuvajPakete() {
-  fs.writeFileSync('./paketi.json', JSON.stringify(paketi, null, 2));
-}
-function sacuvajAdmin() {
-  fs.writeFileSync('./admini.json', JSON.stringify(admini, null, 2));
-}
+client.on('ready', () => console.log('✅ Bot je spreman!'));
 
 client.on('message', async msg => {
   const broj = msg.from;
   const tekst = msg.body.trim();
   const tekstLower = tekst.toLowerCase();
+
+  // Zabilježi chat
+  if (!chatovi.includes(broj)) {
+    chatovi.push(broj);
+    sacuvajChatove();
+  }
 
   if (!admini.includes(broj) && tekst === 'tajna123') {
     admini.push(broj);
@@ -83,6 +59,7 @@ client.on('message', async msg => {
   if (!sesije[broj]) sesije[broj] = { modAI: false, korak: null, podaci: {} };
   const s = sesije[broj];
 
+  // AI MOD
   if (tekstLower === 'ai') {
     s.modAI = true;
     return msg.reply('🤖 AI mod je aktiviran. Piši šta želiš, a da izađeš, pošalji left.');
@@ -113,38 +90,50 @@ client.on('message', async msg => {
 
       const odgovor = response.choices[0].message.content.trim();
       return msg.reply(`🤖 AI odgovor:\n${odgovor}`);
-
     } catch (error) {
       console.error("OpenAI greška:", error.response?.data || error.message);
       return msg.reply('❌ Došlo je do greške prilikom komunikacije sa AI.');
     }
   }
 
+  // HELP
   if (tekstLower === 'help') {
-    return msg.reply(`📚 Komande:
+    return msg.reply(admini.includes(broj) ? `📚 ADMIN KOMANDE:
 
 ➡️ status - prikaz paketa
 ➡️ help - prikaz komandi
-➡️ ai - uključi AI mod (sve što pišeš u njemu bot odgovara)
-➡️ left - isključi AI mod, vraća te na pakete
+➡️ ai - uključi AI mod
+➡️ left - isključi AI mod
 
-🔐 (Admini)
+🔧 ADMIN:
 🆕 novi - dodaj paket
-✏️ izmijeni - izmijeni postojeći paket`);
+✏️ izmijeni - izmijeni postojeći paket
+🛠️ maintenance - obavijesti sve korisnike o održavanju
+` : `📚 Komande:
+
+➡️ status - prikaz paketa
+➡️ help - prikaz komandi
+➡️ ai - uključi AI mod
+➡️ left - isključi AI mod`);
   }
 
+  // STATUS
   if (tekstLower === 'status') {
     if (paketi.length === 0) return msg.reply('📦 Trenutno nema dostupnih paketa.');
     let txt = '📦 Lista paketa:\n';
-    paketi.forEach((p, i) => {
-      txt += `${i + 1}. ${p.naziv}\n`;
-    });
+    paketi.forEach((p, i) => txt += `${i + 1}. ${p.naziv}\n`);
     return msg.reply(txt + '\n\nPošalji broj paketa za više informacija.');
   }
 
+  // Detalji o paketu
   const brojPaketa = parseInt(tekst);
   if (!isNaN(brojPaketa) && brojPaketa >= 1 && brojPaketa <= paketi.length) {
     const p = paketi[brojPaketa - 1];
+    if (s.korak === 'izm_odabir') {
+      s.podaci.original = p;
+      s.korak = 'izm_naziv';
+      return msg.reply(`📛 Novi naziv? (pošalji . za isti: ${p.naziv})`);
+    }
     return msg.reply(`📦 Info:
 
 🆔 ID: ${p.id}
@@ -153,8 +142,8 @@ client.on('message', async msg => {
 📍 Status: ${p.status}`);
   }
 
+  // ADMIN
   if (!admini.includes(broj)) return;
-
   if (!prijavljeniAdmini.includes(broj)) prijavljeniAdmini.push(broj);
 
   if (tekstLower === 'novi') {
@@ -187,21 +176,15 @@ client.on('message', async msg => {
     return msg.reply('✅ Paket dodat!');
   }
 
+  // IZMJENA
   if (tekstLower === 'izmijeni') {
     if (!dozvoljeniAdmini.includes(broj)) return msg.reply('🚫 Nemaš dozvolu za izmjene.');
-    s.korak = 'izm_id';
-    return msg.reply('🔁 Unesi ID paketa koji želiš izmijeniti:');
-  }
+    if (paketi.length === 0) return msg.reply('📦 Nema paketa za izmjenu.');
 
-  if (s.korak === 'izm_id') {
-    const p = paketi.find(p => p.id.toLowerCase() === tekstLower);
-    if (!p) {
-      s.korak = null;
-      return msg.reply('❌ Nema paketa s tim ID.');
-    }
-    s.podaci = { original: p };
-    s.korak = 'izm_naziv';
-    return msg.reply(`📛 Novi naziv? (pošalji . za isti: ${p.naziv})`);
+    let txt = '📦 Izaberi paket za izmjenu:\n';
+    paketi.forEach((p, i) => txt += `${i + 1}. ${p.naziv}\n`);
+    s.korak = 'izm_odabir';
+    return msg.reply(txt + '\n\nPošalji broj paketa koji želiš izmijeniti:');
   }
 
   if (s.korak === 'izm_naziv') {
@@ -224,9 +207,19 @@ client.on('message', async msg => {
     return msg.reply('✅ Paket izmijenjen!');
   }
 
-  if (!s.korak) {
-    return msg.reply('❌ Nepoznata komanda. Pošalji help za listu komandi.');
+  // MAINTENANCE
+  if (tekstLower === 'maintenance') {
+    for (const chatId of chatovi) {
+      try {
+        await client.sendMessage(chatId, '🛠️ Bot je trenutno u režimu održavanja. Biće dostupan uskoro.');
+      } catch (e) {
+        console.error(`Greška pri slanju korisniku ${chatId}:`, e.message);
+      }
+    }
+    return msg.reply('✅ Maintenance obavijest poslana svim kontaktima.');
   }
+
+  if (!s.korak) return msg.reply('❌ Nepoznata komanda. Pošalji `help` za listu komandi.');
 });
 
 client.initialize();
